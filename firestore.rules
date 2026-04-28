@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() { return true; } // Bypass for non-auth demo
+    function isVerified() { return true; } 
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Phase 4: Entity Validation Helpers
+    function isValidIncident(data) {
+      return data.description is string && data.description.size() <= 4000 &&
+             data.status in ['reported', 'triaged', 'matched', 'assigned', 'completed'] &&
+             data.triage is map &&
+             data.tasks is list &&
+             data.manager_analysis is map &&
+             data.reporterId is string && data.reporterId.size() <= 256 &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidVolunteer(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             (data.email == null || (data.email is string && data.email.size() <= 256)) &&
+             data.group in ['Medical', 'Fire', 'Civil', 'Logistics'] &&
+             data.skills is list && data.skills.size() <= 20 &&
+             data.isAvailable is bool &&
+             (data.currentTask == null || (data.currentTask is string && data.currentTask.size() <= 128)) &&
+             (data.location == null || (data.location is map && data.location.lat is number && data.location.lng is number));
+    }
+
+    function isValidNotification(data) {
+      return data.volunteer_id is string && data.incident_id is string &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             (data.incident_desc == null || data.incident_desc is string) &&
+             data.timestamp is timestamp;
+    }
+
+    // Collections
+    match /incidents/{incidentId} {
+      allow list: if true;
+      allow get: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    match /volunteers/{volunteerId} {
+      allow list: if true;
+      allow get: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    match /notifications/{notificationId} {
+      allow list: if true;
+      allow get: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    match /sector_keywords/{sector} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    function isAdmin() {
+      // In non-auth demo, we allow admin actions if a simple flag is present or by default for now
+      return true; 
+    }
+  }
+}

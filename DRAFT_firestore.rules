@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Phase 4: Entity Validation Helpers
+    function isValidIncident(data) {
+      return data.description is string && data.description.size() <= 2000 &&
+             data.status in ['reported', 'triaged', 'matched', 'assigned', 'completed'] &&
+             data.triage is map &&
+             data.triage.urgency is number && data.triage.urgency >= 1 && data.triage.urgency <= 10 &&
+             data.triage.targetGroup in ['Medical', 'Fire', 'Civil', 'Logistics'] &&
+             data.triage.dispatchType in ['AUTO', 'MANUAL'] &&
+             data.triage.summary is string &&
+             data.tasks is list && data.tasks.size() <= 50 &&
+             data.manager_analysis is map &&
+             data.manager_analysis.group_tag is string &&
+             data.manager_analysis.resource_impact is string &&
+             data.manager_analysis.suggested_unit_size is number &&
+             data.manager_analysis.group_specific_metric is string &&
+             data.reporterId is string && data.reporterId.size() <= 256 &&
+             data.timestamp is timestamp &&
+             (data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (data.location == null || (data.location is map && data.location.lat is number && data.location.lng is number));
+    }
+
+    function isValidVolunteer(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             (data.email == null || (data.email is string && data.email.size() <= 256)) &&
+             data.group in ['Medical', 'Fire', 'Civil', 'Logistics'] &&
+             data.skills is list && data.skills.size() <= 20 &&
+             data.isAvailable is bool &&
+             (data.currentTask == null || (data.currentTask is string && data.currentTask.size() <= 128)) &&
+             (data.location == null || (data.location is map && data.location.lat is number && data.location.lng is number));
+    }
+
+    function isValidNotification(data) {
+      return data.volunteer_id is string && data.incident_id is string &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             (data.incident_desc == null || data.incident_desc is string) &&
+             data.timestamp is timestamp;
+    }
+
+    // Collections
+    match /incidents/{incidentId} {
+      allow list: if isVerified() && (resource.data.reporterId == request.auth.token.email || isAdmin());
+      allow get: if isVerified() && isValidId(incidentId);
+      allow create: if isVerified() && isValidId(incidentId) && isValidIncident(incoming()) && incoming().reporterId == request.auth.token.email;
+      allow update: if isVerified() && isValidId(incidentId) && isValidIncident(incoming()) && (
+        // Action: Status/Vol Update (Manager or unit)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assigned_vol'])) ||
+        // Action: Self report update? (Not used in current App.tsx but good to have)
+        (existing().reporterId == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'location', 'imageUrl'])) ||
+        isAdmin()
+      );
+    }
+
+    match /volunteers/{volunteerId} {
+      allow list: if isVerified();
+      allow get: if isVerified() && isValidId(volunteerId);
+      allow create: if isVerified() && isValidId(volunteerId) && isValidVolunteer(incoming());
+      allow update: if isVerified() && isValidId(volunteerId) && isValidVolunteer(incoming()) && (
+        // Volunteers can update their own availability and location
+        (existing().email == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'currentTask', 'location'])) ||
+        isAdmin()
+      );
+    }
+
+    match /notifications/{notificationId} {
+      allow list: if isVerified() && (resource.data.volunteer_id == request.auth.uid || isAdmin());
+      allow get: if isVerified() && isValidId(notificationId);
+      allow create: if isVerified() && isValidId(notificationId) && isValidNotification(incoming());
+      allow update: if isVerified() && isValidId(notificationId) && isValidNotification(incoming()) && (
+        (resource.data.volunteer_id == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        isAdmin()
+      );
+    }
+
+    function isAdmin() {
+      // For demo, we can use a specific email or a role checked against a document
+      // Based on App.tsx manager email: admin@communisync.org
+      return request.auth.token.email == 'admin@communisync.org' || request.auth.token.email == 'kaanishkchinmayi@gmail.com';
+    }
+  }
+}

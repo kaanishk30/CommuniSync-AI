@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "Incident": {
+      "title": "Emergency Incident",
+      "description": "Processed emergency incident with triage data from Gemini",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "triage": {
+          "type": "object",
+          "properties": {
+            "urgency": { "type": "number" },
+            "targetGroup": { "type": "string", "enum": ["Medical", "Fire", "Civil", "Logistics"] },
+            "dispatchType": { "type": "string", "enum": ["AUTO", "MANUAL"] },
+            "summary": { "type": "string" }
+          },
+          "required": ["urgency", "targetGroup", "dispatchType", "summary"]
+        },
+        "tasks": { "type": "array", "items": { "type": "string" } },
+        "manager_analysis": {
+          "type": "object",
+          "properties": {
+            "group_tag": { "type": "string" },
+            "resource_impact": { "type": "string" },
+            "suggested_unit_size": { "type": "number" },
+            "group_specific_metric": { "type": "string" }
+          },
+          "required": ["group_tag", "resource_impact", "suggested_unit_size", "group_specific_metric"]
+        },
+        "status": { "type": "string", "enum": ["reported", "triaged", "matched", "assigned", "completed"] },
+        "assigned_vol": { "type": "string", "description": "ID of the assigned volunteer" },
+        "reporterId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        }
+      },
+      "required": ["triage", "tasks", "manager_analysis", "status", "reporterId", "timestamp"]
+    },
+    "Volunteer": {
+      "title": "Response Volunteer",
+      "description": "Community member available for relief efforts",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "group": { "type": "string", "enum": ["Medical", "Fire", "Civil", "Logistics"] },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "isAvailable": { "type": "boolean" },
+        "currentTask": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        }
+      },
+      "required": ["name", "group", "skills", "isAvailable"]
+    },
+    "Notification": {
+      "title": "Volunteer Notification",
+      "description": "Alert for a volunteer about an incident",
+      "type": "object",
+      "properties": {
+        "volunteer_id": { "type": "string" },
+        "incident_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "incident_desc": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["volunteer_id", "incident_id", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "incidents": { "schema": "Incident", "description": "Emergency incidents reported by units or survivors" },
+    "volunteers": { "schema": "Volunteer", "description": "Verified field responders" },
+    "notifications": { "schema": "Notification", "description": "Real-time alerts for dispatch matching" }
+  }
+}

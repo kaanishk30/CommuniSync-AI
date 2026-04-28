@@ -1,0 +1,10 @@
+{
+  "name": "Remix: CommuniSync AI",
+  "description": "An AI-powered emergency response and volunteer matching system.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
